@@ -2,7 +2,7 @@
 
 """
 @Author     : Bao
-@Date       : 2020/3/29 18:07
+@Date       : 2020/3/29 23:41
 @Desc       : 
 """
 
@@ -35,9 +35,12 @@ sess_config = tf.ConfigProto(allow_soft_placement=True)
 sess_config.gpu_options.allow_growth = True
 
 
-def link_prediction(sess, model, test_data, side, verbose=True):
+def link_prediction(sess, model, test_data, all_triples, side, verbose=True):
     step = 0
-    hits_k = 0
+    rank_raw = 0
+    rank_filter = 0
+    hits_k_raw = 0
+    hits_k_filter = 0
     for sid, pid, oid in zip(*test_data):
         if side == 'left':
             sid, pid, oid = oid, pid ,sid
@@ -54,16 +57,30 @@ def link_prediction(sess, model, test_data, side, verbose=True):
                 model.training: False
             }
         )
-        top_k = dict(sorted([(i, j) for i, j in zip(oid_batch, distance.tolist())], key=itemgetter(1))[:config.top_k])
-        if oid in top_k.keys():
-            hits_k += 1
+        predicted = sorted([(i, j) for i, j in zip(oid_batch, distance.tolist())], key=itemgetter(1))
+
+        skip = 0
+        for i in range(len(predicted)):
+            current_oid, current_distance = predicted[i]
+            if current_oid == oid:
+                rank_raw += i + 1
+                rank_filter += i + 1 - skip
+                if i < config.top_k:
+                    hits_k_raw += 1
+                if i - skip < config.top_k:
+                    hits_k_filter += 1
+                break
+            if side == 'right' and (sid, pid, current_oid) in predicted:
+                skip += 1
+            elif side == 'left' and (current_oid, pid, sid) in predicted:
+                skip += 1
 
         step += 1
         if verbose:
             print('\rprocessing {} side: {:>6d}'.format(side, step + 1), end='')
     print()
 
-    return hits_k / step
+    return rank_raw / step, rank_filter / step, hits_k_raw / step, hits_k_filter / step
 
 
 def main():
@@ -80,7 +97,16 @@ def main():
     saver = tf.train.Saver(max_to_keep=10)
 
     print('loading data...')
+    train_data = data_reader.read_train_data_wo_negative_sampling()
+    valid_data = data_reader.read_valid_data_wo_negative_sampling()
     test_data = data_reader.read_test_data_wo_negative_sampling()
+    all_triples = set()
+    for sid, pid, oid in zip(**train_data):
+        all_triples.add((sid, pid, oid))
+    for sid, pid, oid in zip(**valid_data):
+        all_triples.add((sid, pid, oid))
+    for sid, pid, oid in zip(**test_data):
+        all_triples.add((sid, pid, oid))
 
     with tf.Session(config=sess_config) as sess:
         model_file = args.model_file
@@ -90,13 +116,20 @@ def main():
             print('loading model from {}...'.format(model_file))
             saver.restore(sess, model_file)
 
-            right_score = link_prediction(sess, model, test_data, side='right', verbose=True)
-            left_score = link_prediction(sess, model, test_data, side='left', verbose=True)
+            right_score = link_prediction(sess, model, test_data, all_triples, side='right', verbose=True)
+            left_score = link_prediction(sess, model, test_data, all_triples, side='left', verbose=True)
             hits_score = {
-                'hits@{}_right'.format(config.top_k): right_score,
-                'hits@{}_left'.format(config.top_k): left_score
+                'mean_rank_raw_right': right_score[0],
+                'mean_rank_filter_right': right_score[1],
+                'hits@{}_raw_right'.format(config.top_k): right_score[2],
+                'hits@{}_filter_right'.format(config.top_k): right_score[3],
+                'mean_rank_raw_left': left_score[0],
+                'mean_rank_filter_left': left_score[1],
+                'hits@{}_raw_left'.format(config.top_k): left_score[2],
+                'hits@{}_filter_left'.format(config.top_k): left_score[3]
             }
-            print(hits_score)
+            for k, v in hits_score.items():
+                print('{}: {}'.format(k, v))
 
             save_json(hits_score, os.path.join(config.result_dir, config.task_name, config.current_model, 'prediction.json'))
         else:

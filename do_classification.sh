@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
 
 python classification.py \
-  --task WN18RR \
+  --task FB13 \
   --model TransE

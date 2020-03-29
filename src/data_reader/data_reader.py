@@ -95,5 +95,11 @@ class DataReader:
     def read_test_data(self):
         return self._read_data(self.config.test_data)
 
+    def read_train_data_wo_negative_sampling(self):
+        return self._read_data_wo_negative_sampling(self.config.train_data)
+
+    def read_valid_data_wo_negative_sampling(self):
+        return self._read_data_wo_negative_sampling(self.config.valid_data)
+
     def read_test_data_wo_negative_sampling(self):
         return self._read_data_wo_negative_sampling(self.config.test_data)
