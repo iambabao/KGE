@@ -66,7 +66,18 @@ class TransE:
         self.summary = tf.summary.merge_all()
 
     def forward(self):
+        # embedding
         sem, pem, oem, neg_sem, neg_pem, neg_oem = self.embedding_layer()
+
+        # normalize
+        sem = tf.math.l2_normalize(sem, axis=-1)
+        pem = tf.math.l2_normalize(pem, axis=-1)
+        oem = tf.math.l2_normalize(oem, axis=-1)
+        neg_sem = tf.math.l2_normalize(neg_sem, axis=-1)
+        neg_pem = tf.math.l2_normalize(neg_pem, axis=-1)
+        neg_oem = tf.math.l2_normalize(neg_oem, axis=-1)
+
+        # calculate distance
         pos_dis = tf.norm(sem + pem - oem, ord=2, axis=-1)
         neg_dis = tf.norm(neg_sem + neg_pem - neg_oem, ord=2, axis=-1)
 
@@ -87,13 +98,6 @@ class TransE:
             neg_sem = self.neg_s_dropout(self.entity_embedding(self.neg_sid), training=self.training)
             neg_pem = self.neg_p_dropout(self.relation_embedding(self.neg_pid), training=self.training)
             neg_oem = self.neg_o_dropout(self.entity_embedding(self.neg_oid), training=self.training)
-
-        sem = tf.math.l2_normalize(sem, axis=-1)
-        pem = tf.math.l2_normalize(pem, axis=-1)
-        oem = tf.math.l2_normalize(oem, axis=-1)
-        neg_sem = tf.math.l2_normalize(neg_sem, axis=-1)
-        neg_pem = tf.math.l2_normalize(neg_pem, axis=-1)
-        neg_oem = tf.math.l2_normalize(neg_oem, axis=-1)
 
         return sem, pem, oem, neg_sem, neg_pem, neg_oem
 
