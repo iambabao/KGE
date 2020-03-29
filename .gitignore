@@ -1,3 +1,10 @@
+.idea
+.vscode
+/data
+/result
+temp/
+temp/temp.py
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
