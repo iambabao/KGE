@@ -223,6 +223,9 @@ def main():
     saver = tf.train.Saver(max_to_keep=10)
 
     if args.do_train:
+        print('saving config...')
+        save_json(config.to_dict(), os.path.join(config.result_dir, config.task_name, config.current_model, 'config.json'))
+
         print('loading data...')
         train_data = data_reader.read_train_data()
         valid_data = data_reader.read_valid_data()
@@ -251,7 +254,7 @@ def main():
 
             valid_log_history = run_train(sess, model, train_data, valid_data, saver,
                                           train_writer, valid_writer, verbose=True)
-            save_json(valid_log_history, os.path.join(config.result_dir, 'valid_log_history.json'))
+            save_json(valid_log_history, os.path.join(config.result_dir, config.task_name, config.current_model, 'valid_log_history.json'))
 
     if args.do_eval:
         print('loading data...')

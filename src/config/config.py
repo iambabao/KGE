@@ -114,3 +114,10 @@ class Config:
         self.dropout = dropout
         self.optimizer = optimizer
         self.l2_rate = l2_rate
+
+    def to_dict(self):
+        properties = {}
+        for p, v in vars(self).items():
+            properties[p] = v
+
+        return properties

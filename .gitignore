@@ -2,8 +2,9 @@
 .vscode
 /data
 /result
-temp/
-temp/temp.py
+/**/temp
+temp.*
+/*.sh
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
