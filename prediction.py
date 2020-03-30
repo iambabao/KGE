@@ -70,9 +70,9 @@ def link_prediction(sess, model, test_data, all_triples, side, verbose=True):
                 if i - skip < config.top_k:
                     hits_k_filter += 1
                 break
-            if side == 'right' and (sid, pid, current_oid) in predicted:
+            if side == 'right' and (sid, pid, current_oid) in all_triples:
                 skip += 1
-            elif side == 'left' and (current_oid, pid, sid) in predicted:
+            elif side == 'left' and (current_oid, pid, sid) in all_triples:
                 skip += 1
 
         step += 1
@@ -101,11 +101,11 @@ def main():
     valid_data = data_reader.read_valid_data_wo_negative_sampling()
     test_data = data_reader.read_test_data_wo_negative_sampling()
     all_triples = set()
-    for sid, pid, oid in zip(**train_data):
+    for sid, pid, oid in zip(*train_data):
         all_triples.add((sid, pid, oid))
-    for sid, pid, oid in zip(**valid_data):
+    for sid, pid, oid in zip(*valid_data):
         all_triples.add((sid, pid, oid))
-    for sid, pid, oid in zip(**test_data):
+    for sid, pid, oid in zip(*test_data):
         all_triples.add((sid, pid, oid))
 
     with tf.Session(config=sess_config) as sess:
