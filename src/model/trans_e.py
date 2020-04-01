@@ -19,6 +19,7 @@ class TransE:
         self.margin = config.threshold
         self.lr = config.lr
         self.dropout = config.dropout
+        self.l2_rate = config.l2_rate
 
         self.batch_size = tf.placeholder(tf.int32, [], name='batch_size')
         self.sid = tf.placeholder(tf.int32, [None], name='sid')
@@ -54,7 +55,7 @@ class TransE:
         self.pos_dis, self.neg_dis = self.forward()
         margin_loss = tf.reduce_mean(tf.maximum(0.0, self.pos_dis - self.neg_dis + self.margin))
         constrain_loss = self.get_constrain_loss()
-        self.loss = margin_loss + constrain_loss
+        self.loss = margin_loss + self.l2_rate * constrain_loss
         self.accuracy = tf.reduce_mean(tf.cast(tf.less(self.pos_dis, self.neg_dis), tf.float32))
         self.gradients, self.train_op = self.get_train_op()
 
@@ -78,14 +79,13 @@ class TransE:
         neg_oem = tf.math.l2_normalize(neg_oem, axis=-1)
 
         # calculate distance
-        pos_dis = tf.norm(sem + pem - oem, ord=2, axis=-1)
-        neg_dis = tf.norm(neg_sem + neg_pem - neg_oem, ord=2, axis=-1)
+        pos_dis = tf.norm(sem + pem - oem, ord=1, axis=-1)
+        neg_dis = tf.norm(neg_sem + neg_pem - neg_oem, ord=1, axis=-1)
 
         return pos_dis, neg_dis
 
     def get_train_op(self):
         gradients = tf.gradients(self.loss, tf.trainable_variables())
-        gradients, _ = tf.clip_by_global_norm(gradients, 5)
         train_op = self.optimizer.apply_gradients(zip(gradients, tf.trainable_variables()), self.global_step)
 
         return gradients, train_op
@@ -105,7 +105,7 @@ class TransE:
         sem = self.entity_embedding(self.sid)
         oem = self.entity_embedding(self.oid)
 
-        s_loss = tf.maximum(0.0, tf.norm(sem, ord=2, axis=-1) - 1.0)
-        o_loss = tf.maximum(0.0, tf.norm(oem, ord=2, axis=-1) - 1.0)
+        s_loss = tf.maximum(0.0, tf.norm(sem, ord=2, axis=-1) ** 2 - 1.0)
+        o_loss = tf.maximum(0.0, tf.norm(oem, ord=2, axis=-1) ** 2 - 1.0)
 
         return tf.reduce_mean(s_loss + o_loss)

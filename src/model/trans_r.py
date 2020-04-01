@@ -19,6 +19,7 @@ class TransR:
         self.margin = config.threshold
         self.lr = config.lr
         self.dropout = config.dropout
+        self.l2_rate = config.l2_rate
 
         self.batch_size = tf.placeholder(tf.int32, [], name='batch_size')
         self.sid = tf.placeholder(tf.int32, [None], name='sid')
@@ -55,7 +56,7 @@ class TransR:
         self.pos_dis, self.neg_dis = self.forward()
         margin_loss = tf.reduce_mean(tf.maximum(0.0, self.pos_dis - self.neg_dis + self.margin))
         constrain_loss = self.get_constrain_loss()
-        self.loss = margin_loss + constrain_loss
+        self.loss = margin_loss + self.l2_rate * constrain_loss
         self.accuracy = tf.reduce_mean(tf.cast(tf.less(self.pos_dis, self.neg_dis), tf.float32))
         self.gradients, self.train_op = self.get_train_op()
 
@@ -83,14 +84,13 @@ class TransR:
         neg_oem = tf.math.l2_normalize(neg_oem, axis=-1)
 
         # calculate distance
-        pos_dis = tf.norm(sem + pem - oem, ord=2, axis=-1)
-        neg_dis = tf.norm(neg_sem + neg_pem - neg_oem, ord=2, axis=-1)
+        pos_dis = tf.norm(sem + pem - oem, ord=1, axis=-1)
+        neg_dis = tf.norm(neg_sem + neg_pem - neg_oem, ord=1, axis=-1)
 
         return pos_dis, neg_dis
 
     def get_train_op(self):
         gradients = tf.gradients(self.loss, tf.trainable_variables())
-        gradients, _ = tf.clip_by_global_norm(gradients, 5)
         train_op = self.optimizer.apply_gradients(zip(gradients, tf.trainable_variables()), self.global_step)
 
         return gradients, train_op
@@ -108,13 +108,15 @@ class TransR:
 
     def get_constrain_loss(self):
         sem = self.entity_embedding(self.sid)
+        pem = self.relation_embedding(self.pid)
         oem = self.entity_embedding(self.oid)
         projected_sem = self.projection_layer(sem)
         projected_oem = self.projection_layer(oem)
 
-        s_loss = tf.maximum(0.0, tf.norm(sem, ord=2, axis=-1) - 1.0)
-        o_loss = tf.maximum(0.0, tf.norm(oem, ord=2, axis=-1) - 1.0)
-        projected_s_loss = tf.maximum(0.0, tf.norm(projected_sem, ord=2, axis=-1) - 1.0)
-        projected_o_loss = tf.maximum(0.0, tf.norm(projected_oem, ord=2, axis=-1) - 1.0)
+        s_loss = tf.maximum(0.0, tf.norm(sem, ord=2, axis=-1) ** 2 - 1.0)
+        p_loss = tf.maximum(0.0, tf.norm(pem, ord=2, axis=-1) ** 2 - 1.0)
+        o_loss = tf.maximum(0.0, tf.norm(oem, ord=2, axis=-1) ** 2 - 1.0)
+        projected_s_loss = tf.maximum(0.0, tf.norm(projected_sem, ord=2, axis=-1) ** 2 - 1.0)
+        projected_o_loss = tf.maximum(0.0, tf.norm(projected_oem, ord=2, axis=-1) ** 2 - 1.0)
 
-        return tf.reduce_mean(s_loss + o_loss, projected_s_loss, projected_o_loss)
+        return tf.reduce_mean(s_loss + o_loss + p_loss + projected_s_loss + projected_o_loss)
