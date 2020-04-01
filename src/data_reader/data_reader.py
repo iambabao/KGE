@@ -6,27 +6,33 @@
 @Desc       :
 """
 
-import numpy as np
+import random
 
 from src.utils import read_json, read_json_lines
 
 
-def negative_sampling_v0(s, p, o, entities):
-    # randomly replace subject or object with random entity in all entity set
-    if np.random.randint(0, 2):
-        return np.random.choice(entities), p, o
-    else:
-        return s, p, np.random.choice(entities)
+def negative_sampling_v0(s, p, o, entities, num_neg):
+    neg_set = set()
+    while len(neg_set) < num_neg:
+        # randomly replace subject or object with random entity in all entity set
+        if random.randint(0, 2):
+            neg_set.add((random.choice(entities), p, o))
+        else:
+            neg_set.add((s, p, random.choice(entities)))
+    return neg_set
 
 
-def negative_sampling_v1(s, p, o, relation_mapping):
-    # replace subject or object according to probability
-    s_set = relation_mapping[p]['s']
-    o_set = relation_mapping[p]['o']
-    if np.random.randint(0, len(s_set) + len(o_set)) < len(s_set):
-        return np.random.choice(s_set), p, o
-    else:
-        return s, p, np.random.choice(o_set)
+def negative_sampling_v1(s, p, o, relation_mapping, num_neg):
+    neg_set = set()
+    while len(neg_set) < num_neg:
+        # replace subject or object according to probability
+        s_set = relation_mapping[p]['s']
+        o_set = relation_mapping[p]['o']
+        if random.randint(0, len(s_set) + len(o_set)) < len(s_set):
+            neg_set.add((random.choice(s_set), p, o))
+        else:
+            neg_set.add((s, p, random.choice(o_set)))
+    return neg_set
 
 
 class DataReader:
@@ -34,7 +40,7 @@ class DataReader:
         self.config = config
         self.relation_mapping = read_json(self.config.relation_mapping)
 
-    def _read_data(self, filename):
+    def _read_data_with_negative_sampling(self, filename, num_neg):
         sid = []
         pid = []
         oid = []
@@ -47,15 +53,15 @@ class DataReader:
             s = line['s']
             p = line['p']
             o = line['o']
-            # neg_s, neg_p, neg_o = negative_sampling_v0(s, p, o, list(self.config.entity_2_id.keys()))
-            neg_s, neg_p, neg_o = negative_sampling_v1(s, p, o, self.relation_mapping)
 
-            sid.append(self.config.entity_2_id[s])
-            pid.append(self.config.relation_2_id[p])
-            oid.append(self.config.entity_2_id[o])
-            neg_sid.append(self.config.entity_2_id[neg_s])
-            neg_pid.append(self.config.relation_2_id[neg_p])
-            neg_oid.append(self.config.entity_2_id[neg_o])
+            # for neg_s, neg_p, neg_o in negative_sampling_v0(s, p, o, list(self.config.entity_2_id.keys()), num_neg):
+            for neg_s, neg_p, neg_o in negative_sampling_v1(s, p, o, self.relation_mapping, num_neg):
+                sid.append(self.config.entity_2_id[s])
+                pid.append(self.config.relation_2_id[p])
+                oid.append(self.config.entity_2_id[o])
+                neg_sid.append(self.config.entity_2_id[neg_s])
+                neg_pid.append(self.config.relation_2_id[neg_p])
+                neg_oid.append(self.config.entity_2_id[neg_o])
 
             counter += 1
             if counter % 10000 == 0:
@@ -86,14 +92,14 @@ class DataReader:
 
         return sid, pid, oid
 
-    def read_train_data(self):
-        return self._read_data(self.config.train_data)
+    def read_train_data(self, num_neg):
+        return self._read_data_with_negative_sampling(self.config.train_data, num_neg)
 
-    def read_valid_data(self):
-        return self._read_data(self.config.valid_data)
+    def read_valid_data(self, num_neg):
+        return self._read_data_with_negative_sampling(self.config.valid_data, num_neg)
 
-    def read_test_data(self):
-        return self._read_data(self.config.test_data)
+    def read_test_data(self, num_neg):
+        return self._read_data_with_negative_sampling(self.config.test_data, num_neg)
 
     def read_train_data_wo_negative_sampling(self):
         return self._read_data_wo_negative_sampling(self.config.train_data)

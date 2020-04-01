@@ -19,7 +19,7 @@ class Config:
                  kernel_size=(2, 3, 4, 5), filter_dim=64,
                  num_layer=4, num_head=8, model_dim=256,
                  fc_size_s=128, fc_size_m=512, fc_size_l=1024,
-                 optimizer='Adam', lr=0.001, dropout=0.1, l2_rate=0.0,
+                 optimizer='Adam', lr=0.001, dropout=0.1, l2_rate=0.001,
                  beam_search=False):
         self.root_dir = root_dir
         self.task_name = task_name
@@ -118,6 +118,7 @@ class Config:
     def to_dict(self):
         properties = {}
         for p, v in vars(self).items():
-            properties[p] = v
+            if not isinstance(v, dict):
+                properties[p] = v
 
         return properties

@@ -14,7 +14,7 @@ import tensorflow as tf
 from src.config import Config
 from src.data_reader import DataReader
 from src.model import get_model
-from src.utils import makedirs, read_json_dict, save_json, save_json_lines, print_title, make_batch_iter
+from src.utils import makedirs, print_title, read_json_dict, save_json, save_json_lines, make_batch_iter
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--task', '-t', type=str, required=True)
@@ -29,7 +29,7 @@ parser.add_argument('--entity_em_size', type=int, default=200)
 parser.add_argument('--relation_em_size', type=int, default=200)
 parser.add_argument('--optimizer', type=str, default='Adam')
 parser.add_argument('--lr', type=float, default=1e-3)
-parser.add_argument('--dropout', type=float, default=0.2)
+parser.add_argument('--dropout', type=float, default=0.1)
 parser.add_argument('--model_file', type=str)
 parser.add_argument('--log_steps', type=int, default=100)
 parser.add_argument('--save_steps', type=int, default=1000)
@@ -191,6 +191,8 @@ def run_train(sess, model, train_data, valid_data, saver,
                         flag += 1
                     elif args.early_stop:
                         return valid_log_history
+                    if valid_accuracy == 1.0:
+                        return valid_log_history
 
                     valid_log = valid_accuracy
                     valid_log_history['loss'].append(valid_loss)
@@ -227,8 +229,8 @@ def main():
         save_json(config.to_dict(), os.path.join(config.result_dir, config.task_name, config.current_model, 'config.json'))
 
         print('loading data...')
-        train_data = data_reader.read_train_data()
-        valid_data = data_reader.read_valid_data()
+        train_data = data_reader.read_train_data(num_neg=10)
+        valid_data = data_reader.read_valid_data(num_neg=1)
 
         print_title('Trainable Variables')
         for v in tf.trainable_variables():
@@ -252,13 +254,12 @@ def main():
             train_writer = tf.summary.FileWriter(config.train_log_dir, sess.graph)
             valid_writer = tf.summary.FileWriter(config.valid_log_dir, sess.graph)
 
-            valid_log_history = run_train(sess, model, train_data, valid_data, saver,
-                                          train_writer, valid_writer, verbose=True)
+            valid_log_history = run_train(sess, model, train_data, valid_data, saver, train_writer, valid_writer, verbose=True)
             save_json(valid_log_history, os.path.join(config.result_dir, config.task_name, config.current_model, 'valid_log_history.json'))
 
     if args.do_eval:
         print('loading data...')
-        valid_data = data_reader.read_valid_data()
+        valid_data = data_reader.read_valid_data(num_neg=1)
 
         with tf.Session(config=sess_config) as sess:
             model_file = args.model_file
@@ -278,7 +279,7 @@ def main():
 
     if args.do_test:
         print('loading data...')
-        test_data = data_reader.read_test_data()
+        test_data = data_reader.read_test_data(num_neg=1)
 
         with tf.Session(config=sess_config) as sess:
             model_file = args.model_file

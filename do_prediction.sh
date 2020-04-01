@@ -5,4 +5,5 @@ python prediction.py \
   --model TransE \
   --top_k 10 \
   --entity_em_size 200 \
-  --relation_em_size 200
+  --relation_em_size 200 \
+  --optimizer SGD

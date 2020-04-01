@@ -6,4 +6,5 @@ python main.py \
   --do_eval \
   --batch 128 \
   --entity_em_size 200 \
-  --relation_em_size 200
+  --relation_em_size 200 \
+  --optimizer SGD

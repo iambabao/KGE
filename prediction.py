@@ -22,12 +22,14 @@ parser.add_argument('--model', '-m', type=str, required=True)
 parser.add_argument('--top_k', type=int, default=5)
 parser.add_argument('--entity_em_size', type=int, default=200)
 parser.add_argument('--relation_em_size', type=int, default=200)
+parser.add_argument('--optimizer', type=str, default='Adam')
 parser.add_argument('--model_file', type=str)
 args = parser.parse_args()
 
 config = Config('.', args.task, args.model,
                 top_k=args.top_k,
-                entity_em_size=args.entity_em_size, relation_em_size=args.relation_em_size)
+                entity_em_size=args.entity_em_size, relation_em_size=args.relation_em_size,
+                optimizer=args.optimizer)
 
 # os.environ['TF_CPP_MIN_LOG_LEVEL'] = '1'
 # os.environ['CUDA_VISIBLE_DEVICES'] = ''
@@ -46,7 +48,7 @@ def link_prediction(sess, model, test_data, all_triples, side, verbose=True):
             sid, pid, oid = oid, pid ,sid
         sid_batch = [sid] * len(config.id_2_entity)
         pid_batch = [pid] * len(config.id_2_entity)
-        oid_batch = list(config.id_2_entity)
+        oid_batch = list(config.id_2_entity.keys())
         distance = sess.run(
             model.pos_dis,
             feed_dict={
