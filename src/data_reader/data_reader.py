@@ -22,16 +22,23 @@ def negative_sampling_v0(s, p, o, entities, num_neg):
     return neg_set
 
 
-def negative_sampling_v1(s, p, o, relation_mapping, num_neg):
+def negative_sampling_v1(s, p, o, relation_mapping, entities, num_neg):
     neg_set = set()
-    while len(neg_set) < num_neg:
-        # replace subject or object according to probability
-        s_set = relation_mapping[p]['s']
-        o_set = relation_mapping[p]['o']
-        if random.randint(0, len(s_set) + len(o_set)) < len(s_set):
-            neg_set.add((random.choice(s_set), p, o))
-        else:
-            neg_set.add((s, p, random.choice(o_set)))
+    s_set = relation_mapping[p]['s']
+    o_set = relation_mapping[p]['o']
+    if len(s_set) + len(o_set) <= num_neg:
+        for _s in s_set:
+            neg_set.add((_s, p, o))
+        for _o in o_set:
+            neg_set.add((s, p, _o))
+        neg_set.update(negative_sampling_v0(s, p, o, entities, num_neg - len(neg_set)))
+    else:
+        while len(neg_set) < num_neg:
+            # replace subject or object according to probability
+            if random.randint(0, len(s_set) + len(o_set)) < len(s_set):
+                neg_set.add((random.choice(s_set), p, o))
+            else:
+                neg_set.add((s, p, random.choice(o_set)))
     return neg_set
 
 
@@ -54,8 +61,7 @@ class DataReader:
             p = line['p']
             o = line['o']
 
-            # for neg_s, neg_p, neg_o in negative_sampling_v0(s, p, o, list(self.config.entity_2_id.keys()), num_neg):
-            for neg_s, neg_p, neg_o in negative_sampling_v1(s, p, o, self.relation_mapping, num_neg):
+            for neg_s, neg_p, neg_o in negative_sampling_v1(s, p, o, self.relation_mapping, list(self.config.entity_2_id.keys()), num_neg):
                 sid.append(self.config.entity_2_id[s])
                 pid.append(self.config.relation_2_id[p])
                 oid.append(self.config.entity_2_id[o])

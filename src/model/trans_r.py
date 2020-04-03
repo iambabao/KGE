@@ -53,6 +53,7 @@ class TransR:
         else:
             assert False
 
+        self.lr = tf.train.exponential_decay(self.lr, self.global_step, decay_steps=2000, decay_rate=0.99)
         self.pos_dis, self.neg_dis = self.forward()
         margin_loss = tf.reduce_mean(tf.maximum(0.0, self.pos_dis - self.neg_dis + self.margin))
         constrain_loss = self.get_constrain_loss()

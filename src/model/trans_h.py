@@ -44,6 +44,7 @@ class TransH:
         self.neg_o_dropout = tf.keras.layers.Dropout(self.dropout)
         self.neg_norm_dropout = tf.keras.layers.Dropout(self.dropout)
 
+        self.lr = tf.train.exponential_decay(self.lr, self.global_step, decay_steps=2000, decay_rate=0.99)
         if config.optimizer == 'Adam':
             self.optimizer = tf.train.AdamOptimizer(self.lr)
         elif config.optimizer == 'Adadelta':
