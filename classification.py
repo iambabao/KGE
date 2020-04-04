@@ -74,7 +74,8 @@ def main():
 
     print_title('Result')
     metrics = get_metrics(config.test_result, threshold)
-    print(metrics)
+    for k, v in metrics.items():
+        print('{}: {}'.format(k, v))
 
     save_json(metrics, os.path.join(config.result_dir, config.task_name, config.current_model, 'classification.json'))
 

@@ -86,8 +86,9 @@ class Config:
         self.entity_em_size = entity_em_size
         self.relation_em_size = relation_em_size
         self.beam_search = beam_search
-        self.entity_2_id, self.id_2_entity = None, None
-        self.relation_2_id, self.id_2_relation = None, None
+        self.entity_2_id, self.id_2_entity = {}, {}
+        self.relation_2_id, self.id_2_relation = {}, {}
+        self.replace_prob = {}
 
         # RNN
         self.hidden_size = hidden_size

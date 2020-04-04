@@ -7,7 +7,7 @@ python main.py \
   --do_eval \
   --do_test \
   --epoch 500 \
-  --batch 1280 \
+  --batch 128 \
   --margin 4.0 \
   --entity_em_size 200 \
   --relation_em_size 200 \

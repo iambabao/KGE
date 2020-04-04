@@ -43,28 +43,28 @@ def link_prediction(sess, model, test_data, all_triples, side, verbose=True):
     rank_filter = 0
     hits_k_raw = 0
     hits_k_filter = 0
-    for sid, pid, oid in zip(*test_data):
+    for pos_s, pos_p, pos_o in zip(*test_data):
         if side == 'left':
-            sid, pid, oid = oid, pid ,sid
-        sid_batch = [sid] * len(config.id_2_entity)
-        pid_batch = [pid] * len(config.id_2_entity)
-        oid_batch = list(config.id_2_entity.keys())
+            pos_s, pos_p, pos_o = pos_o, pos_p ,pos_s
+        pos_s_batch = [pos_s] * len(config.id_2_entity)
+        pos_p_batch = [pos_p] * len(config.id_2_entity)
+        pos_o_batch = list(config.id_2_entity.keys())
         distance = sess.run(
             model.pos_dis,
             feed_dict={
-                model.batch_size: len(sid_batch),
-                model.sid: sid_batch,
-                model.pid: pid_batch,
-                model.oid: oid_batch,
+                model.batch_size: len(pos_s_batch),
+                model.pos_s: pos_s_batch,
+                model.pos_p: pos_p_batch,
+                model.pos_o: pos_o_batch,
                 model.training: False
             }
         )
-        predicted = sorted([(i, j) for i, j in zip(oid_batch, distance.tolist())], key=itemgetter(1))
+        predicted = sorted([(i, j) for i, j in zip(pos_o_batch, distance.tolist())], key=itemgetter(1))
 
         skip = 0
         for i in range(len(predicted)):
-            current_oid, current_distance = predicted[i]
-            if current_oid == oid:
+            current_o, current_distance = predicted[i]
+            if current_o == pos_o:
                 rank_raw += i + 1
                 rank_filter += i + 1 - skip
                 if i < config.top_k:
@@ -72,9 +72,9 @@ def link_prediction(sess, model, test_data, all_triples, side, verbose=True):
                 if i - skip < config.top_k:
                     hits_k_filter += 1
                 break
-            if side == 'right' and (sid, pid, current_oid) in all_triples:
+            if side == 'right' and (pos_s, pos_p, current_o) in all_triples:
                 skip += 1
-            elif side == 'left' and (current_oid, pid, sid) in all_triples:
+            elif side == 'left' and (current_o, pos_p, pos_s) in all_triples:
                 skip += 1
 
         step += 1
@@ -99,9 +99,9 @@ def main():
     saver = tf.train.Saver(max_to_keep=10)
 
     print('loading data...')
-    train_data = data_reader.read_train_data_wo_negative_sampling()
-    valid_data = data_reader.read_valid_data_wo_negative_sampling()
-    test_data = data_reader.read_test_data_wo_negative_sampling()
+    train_data = data_reader.read_train_data()
+    valid_data = data_reader.read_valid_data()
+    test_data = data_reader.read_test_data()
     all_triples = set()
     for sid, pid, oid in zip(*train_data):
         all_triples.add((sid, pid, oid))

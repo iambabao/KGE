@@ -8,13 +8,14 @@
 
 import os
 import time
+import random
 import argparse
 import tensorflow as tf
 
 from src.config import Config
 from src.data_reader import DataReader
 from src.model import get_model
-from src.utils import makedirs, print_title, read_json_dict, save_json, save_json_lines, make_batch_iter
+from src.utils import makedirs, print_title, read_json, read_json_dict, save_json, save_json_lines, make_batch_iter
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--task', '-t', type=str, required=True)
@@ -59,23 +60,69 @@ def save_result(result, result_file):
     save_json_lines(result, result_file)
 
 
+def negative_sampling_v0(s_batch, p_batch, o_batch, num_neg):
+    entity_list = list(config.id_2_entity.keys())
+    pos_s_batch, pos_p_batch, pos_o_batch = [], [], []
+    neg_s_batch, neg_p_batch, neg_o_batch = [], [], []
+    for pos_s, pos_p, pos_o in zip(s_batch, p_batch, o_batch):
+        neg_set = set()
+        while len(neg_set) < num_neg:
+            # replace subject or object with random selection
+            if random.randint(0, 2):
+                neg_set.add((random.choice(entity_list), pos_p, pos_o))
+            else:
+                neg_set.add((pos_s, pos_p, random.choice(entity_list)))
+        for neg_s, neg_p, neg_o in neg_set:
+            pos_s_batch.append(pos_s)
+            pos_p_batch.append(pos_p)
+            pos_o_batch.append(pos_o)
+            neg_s_batch.append(neg_s)
+            neg_p_batch.append(neg_p)
+            neg_o_batch.append(neg_o)
+    return pos_s_batch, pos_p_batch, pos_o_batch, neg_s_batch, neg_p_batch, neg_o_batch
+
+
+def negative_sampling_v1(s_batch, p_batch, o_batch, num_neg):
+    entity_list = list(config.id_2_entity.keys())
+    pos_s_batch, pos_p_batch, pos_o_batch = [], [], []
+    neg_s_batch, neg_p_batch, neg_o_batch = [], [], []
+    for pos_s, pos_p, pos_o in zip(s_batch, p_batch, o_batch):
+        neg_set = set()
+        while len(neg_set) < num_neg:
+            # replace subject or object according to probability
+            if random.random() < config.replace_prob[pos_p]['s']:
+                neg_set.add((random.choice(entity_list), pos_p, pos_o))
+            else:
+                neg_set.add((pos_s, pos_p, random.choice(entity_list)))
+        for neg_s, neg_p, neg_o in neg_set:
+            pos_s_batch.append(pos_s)
+            pos_p_batch.append(pos_p)
+            pos_o_batch.append(pos_o)
+            neg_s_batch.append(neg_s)
+            neg_p_batch.append(neg_p)
+            neg_o_batch.append(neg_o)
+    return pos_s_batch, pos_p_batch, pos_o_batch, neg_s_batch, neg_p_batch, neg_o_batch
+
+
 def run_test(sess, model, test_data, verbose=True):
     pos_dis = []
     neg_dis = []
     batch_iter = make_batch_iter(list(zip(*test_data)), config.batch_size, shuffle=False, verbose=verbose)
     for step, batch in enumerate(batch_iter):
-        sid, pid, oid, neg_sid, neg_pid, neg_oid = list(zip(*batch))
+        pos_s, pos_p, pos_o = list(zip(*batch))
+        # pos_s, pos_p, pos_o, neg_s, neg_p, neg_o = negative_sampling_v0(pos_s, pos_p, pos_o, num_neg=1)
+        pos_s, pos_p, pos_o, neg_s, neg_p, neg_o = negative_sampling_v1(pos_s, pos_p, pos_o, num_neg=1)
 
         _pos_dis, _neg_dis, loss, accuracy = sess.run(
             [model.pos_dis, model.neg_dis, model.loss, model.accuracy],
             feed_dict={
-                model.batch_size: len(sid),
-                model.sid: sid,
-                model.pid: pid,
-                model.oid: oid,
-                model.neg_sid: neg_sid,
-                model.neg_pid: neg_pid,
-                model.neg_oid: neg_oid,
+                model.batch_size: len(pos_s),
+                model.pos_s: pos_s,
+                model.pos_p: pos_p,
+                model.pos_o: pos_o,
+                model.neg_s: neg_s,
+                model.neg_p: neg_p,
+                model.neg_o: neg_o,
                 model.training: False
             }
         )
@@ -97,18 +144,20 @@ def run_evaluate(sess, model, valid_data, valid_summary_writer=None, verbose=Tru
     total_accuracy = 0.0
     batch_iter = make_batch_iter(list(zip(*valid_data)), config.batch_size, shuffle=False, verbose=verbose)
     for batch in batch_iter:
-        sid, pid, oid, neg_sid, neg_pid, neg_oid = list(zip(*batch))
+        pos_s, pos_p, pos_o = list(zip(*batch))
+        # pos_s, pos_p, pos_o, neg_s, neg_p, neg_o = negative_sampling_v0(pos_s, pos_p, pos_o, num_neg=1)
+        pos_s, pos_p, pos_o, neg_s, neg_p, neg_o = negative_sampling_v1(pos_s, pos_p, pos_o, num_neg=1)
 
         _pos_dis, _neg_dis, loss, accuracy, global_step, summary = sess.run(
             [model.pos_dis, model.neg_dis, model.loss, model.accuracy, model.global_step, model.summary],
             feed_dict={
-                model.batch_size: len(sid),
-                model.sid: sid,
-                model.pid: pid,
-                model.oid: oid,
-                model.neg_sid: neg_sid,
-                model.neg_pid: neg_pid,
-                model.neg_oid: neg_oid,
+                model.batch_size: len(pos_s),
+                model.pos_s: pos_s,
+                model.pos_p: pos_p,
+                model.pos_o: pos_o,
+                model.neg_s: neg_s,
+                model.neg_p: neg_p,
+                model.neg_o: neg_o,
                 model.training: False
             }
         )
@@ -142,18 +191,20 @@ def run_train(sess, model, train_data, valid_data, saver,
         batch_iter = make_batch_iter(list(zip(*train_data)), config.batch_size, shuffle=True, verbose=verbose)
         for batch in batch_iter:
             start_time = time.time()
-            sid, pid, oid, neg_sid, neg_pid, neg_oid = list(zip(*batch))
+            pos_s, pos_p, pos_o = list(zip(*batch))
+            # pos_s, pos_p, pos_o, neg_s, neg_p, neg_o = negative_sampling_v0(pos_s, pos_p, pos_o, num_neg=10)
+            pos_s, pos_p, pos_o, neg_s, neg_p, neg_o = negative_sampling_v1(pos_s, pos_p, pos_o, num_neg=10)
 
             _, loss, accuracy, global_step, summary = sess.run(
                 [model.train_op, model.loss, model.accuracy, model.global_step, model.summary],
                 feed_dict={
-                    model.batch_size: len(sid),
-                    model.sid: sid,
-                    model.pid: pid,
-                    model.oid: oid,
-                    model.neg_sid: neg_sid,
-                    model.neg_pid: neg_pid,
-                    model.neg_oid: neg_oid,
+                    model.batch_size: len(pos_s),
+                    model.pos_s: pos_s,
+                    model.pos_p: pos_p,
+                    model.pos_o: pos_o,
+                    model.neg_s: neg_s,
+                    model.neg_p: neg_p,
+                    model.neg_o: neg_o,
                     model.training: True
                 }
             )
@@ -217,6 +268,11 @@ def main():
     config.relation_2_id, config.id_2_relation = read_json_dict(config.relation_dict)
     config.num_entity = len(config.entity_2_id)
     config.num_relation = len(config.relation_2_id)
+    relation_mapping = read_json(config.relation_mapping)
+    for p in relation_mapping.keys():
+        tph = len(relation_mapping[p]['o']) / len(relation_mapping[p]['s'])
+        hpt = len(relation_mapping[p]['s']) / len(relation_mapping[p]['o'])
+        config.replace_prob[config.relation_2_id[p]] = {'s': tph / (tph + hpt), 'o': hpt / (tph + hpt)}
 
     data_reader = DataReader(config)
 
@@ -229,8 +285,8 @@ def main():
         save_json(config.to_dict(), os.path.join(config.result_dir, config.task_name, config.current_model, 'config.json'))
 
         print('loading data...')
-        train_data = data_reader.read_train_data(num_neg=10)
-        valid_data = data_reader.read_valid_data(num_neg=1)
+        train_data = data_reader.read_train_data()
+        valid_data = data_reader.read_valid_data()
 
         print_title('Trainable Variables')
         for v in tf.trainable_variables():
@@ -259,7 +315,7 @@ def main():
 
     if args.do_eval:
         print('loading data...')
-        valid_data = data_reader.read_valid_data(num_neg=1)
+        valid_data = data_reader.read_valid_data()
 
         with tf.Session(config=sess_config) as sess:
             model_file = args.model_file
@@ -279,7 +335,7 @@ def main():
 
     if args.do_test:
         print('loading data...')
-        test_data = data_reader.read_test_data(num_neg=1)
+        test_data = data_reader.read_test_data()
 
         with tf.Session(config=sess_config) as sess:
             model_file = args.model_file
