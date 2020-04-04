@@ -14,7 +14,7 @@ from src.utils import read_json, read_json_lines
 def negative_sampling_v0(s, p, o, entities, num_neg):
     neg_set = set()
     while len(neg_set) < num_neg:
-        # randomly replace subject or object with random entity in all entity set
+        # randomly replace subject or object with random selecting
         if random.randint(0, 2):
             neg_set.add((random.choice(entities), p, o))
         else:
@@ -22,30 +22,26 @@ def negative_sampling_v0(s, p, o, entities, num_neg):
     return neg_set
 
 
-def negative_sampling_v1(s, p, o, relation_mapping, entities, num_neg):
+def negative_sampling_v1(s, p, o, replace_prob, entities, num_neg):
     neg_set = set()
-    s_set = relation_mapping[p]['s']
-    o_set = relation_mapping[p]['o']
-    if len(s_set) + len(o_set) <= num_neg:
-        for _s in s_set:
-            neg_set.add((_s, p, o))
-        for _o in o_set:
-            neg_set.add((s, p, _o))
-        neg_set.update(negative_sampling_v0(s, p, o, entities, num_neg - len(neg_set)))
-    else:
-        while len(neg_set) < num_neg:
-            # replace subject or object according to probability
-            if random.randint(0, len(s_set) + len(o_set)) < len(s_set):
-                neg_set.add((random.choice(s_set), p, o))
-            else:
-                neg_set.add((s, p, random.choice(o_set)))
+    while len(neg_set) < num_neg:
+        # replace subject or object according to probability
+        if random.random() < replace_prob[p]['s']:
+            neg_set.add((random.choice(entities), p, o))
+        else:
+            neg_set.add((s, p, random.choice(entities)))
     return neg_set
 
 
 class DataReader:
     def __init__(self, config):
         self.config = config
-        self.relation_mapping = read_json(self.config.relation_mapping)
+        self.replace_prob = dict()
+        relation_mapping = read_json(self.config.relation_mapping)
+        for p in relation_mapping.keys():
+            tph = len(relation_mapping[p]['o']) / len(relation_mapping[p]['s'])
+            hpt = len(relation_mapping[p]['s']) / len(relation_mapping[p]['o'])
+            self.replace_prob[p] = {'s': tph / (tph + hpt), 'o': hpt / (tph + hpt)}
 
     def _read_data_with_negative_sampling(self, filename, num_neg):
         sid = []
@@ -61,7 +57,8 @@ class DataReader:
             p = line['p']
             o = line['o']
 
-            for neg_s, neg_p, neg_o in negative_sampling_v1(s, p, o, self.relation_mapping, list(self.config.entity_2_id.keys()), num_neg):
+            # for neg_s, neg_p, neg_o in negative_sampling_v0(s, p, o, self.replace_prob, list(self.config.entity_2_id.keys()), num_neg):
+            for neg_s, neg_p, neg_o in negative_sampling_v1(s, p, o, self.replace_prob, list(self.config.entity_2_id.keys()), num_neg):
                 sid.append(self.config.entity_2_id[s])
                 pid.append(self.config.relation_2_id[p])
                 oid.append(self.config.entity_2_id[o])

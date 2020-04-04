@@ -191,8 +191,8 @@ def run_train(sess, model, train_data, valid_data, saver,
                         flag += 1
                     elif args.early_stop:
                         return valid_log_history
-                    if valid_accuracy == 1.0:
-                        return valid_log_history
+                    # if valid_accuracy == 1.0:
+                    #     return valid_log_history
 
                     valid_log = valid_accuracy
                     valid_log_history['loss'].append(valid_loss)
