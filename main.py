@@ -110,8 +110,7 @@ def run_test(sess, model, test_data, verbose=True):
     batch_iter = make_batch_iter(list(zip(*test_data)), config.batch_size, shuffle=False, verbose=verbose)
     for step, batch in enumerate(batch_iter):
         pos_s, pos_p, pos_o = list(zip(*batch))
-        # pos_s, pos_p, pos_o, neg_s, neg_p, neg_o = negative_sampling_v0(pos_s, pos_p, pos_o, num_neg=1)
-        pos_s, pos_p, pos_o, neg_s, neg_p, neg_o = negative_sampling_v1(pos_s, pos_p, pos_o, num_neg=1)
+        pos_s, pos_p, pos_o, neg_s, neg_p, neg_o = negative_sampling_v0(pos_s, pos_p, pos_o, num_neg=1)
 
         _pos_dis, _neg_dis, loss, accuracy = sess.run(
             [model.pos_dis, model.neg_dis, model.loss, model.accuracy],
@@ -145,8 +144,7 @@ def run_evaluate(sess, model, valid_data, valid_summary_writer=None, verbose=Tru
     batch_iter = make_batch_iter(list(zip(*valid_data)), config.batch_size, shuffle=False, verbose=verbose)
     for batch in batch_iter:
         pos_s, pos_p, pos_o = list(zip(*batch))
-        # pos_s, pos_p, pos_o, neg_s, neg_p, neg_o = negative_sampling_v0(pos_s, pos_p, pos_o, num_neg=1)
-        pos_s, pos_p, pos_o, neg_s, neg_p, neg_o = negative_sampling_v1(pos_s, pos_p, pos_o, num_neg=1)
+        pos_s, pos_p, pos_o, neg_s, neg_p, neg_o = negative_sampling_v0(pos_s, pos_p, pos_o, num_neg=1)
 
         _pos_dis, _neg_dis, loss, accuracy, global_step, summary = sess.run(
             [model.pos_dis, model.neg_dis, model.loss, model.accuracy, model.global_step, model.summary],
@@ -192,7 +190,6 @@ def run_train(sess, model, train_data, valid_data, saver,
         for batch in batch_iter:
             start_time = time.time()
             pos_s, pos_p, pos_o = list(zip(*batch))
-            # pos_s, pos_p, pos_o, neg_s, neg_p, neg_o = negative_sampling_v0(pos_s, pos_p, pos_o, num_neg=10)
             pos_s, pos_p, pos_o, neg_s, neg_p, neg_o = negative_sampling_v1(pos_s, pos_p, pos_o, num_neg=10)
 
             _, loss, accuracy, global_step, summary = sess.run(

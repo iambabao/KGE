@@ -44,11 +44,15 @@ def link_prediction(sess, model, test_data, all_triples, side, verbose=True):
     hits_k_raw = 0
     hits_k_filter = 0
     for pos_s, pos_p, pos_o in zip(*test_data):
-        if side == 'left':
-            pos_s, pos_p, pos_o = pos_o, pos_p ,pos_s
-        pos_s_batch = [pos_s] * len(config.id_2_entity)
-        pos_p_batch = [pos_p] * len(config.id_2_entity)
-        pos_o_batch = list(config.id_2_entity.keys())
+        if side == 'right':
+            pos_s_batch = [pos_s] * len(config.id_2_entity)
+            pos_p_batch = [pos_p] * len(config.id_2_entity)
+            pos_o_batch = list(config.id_2_entity.keys())
+        else:
+            pos_s_batch = list(config.id_2_entity.keys())
+            pos_p_batch = [pos_p] * len(config.id_2_entity)
+            pos_o_batch = [pos_o] * len(config.id_2_entity)
+
         distance = sess.run(
             model.pos_dis,
             feed_dict={
@@ -59,12 +63,15 @@ def link_prediction(sess, model, test_data, all_triples, side, verbose=True):
                 model.training: False
             }
         )
-        predicted = sorted([(i, j) for i, j in zip(pos_o_batch, distance.tolist())], key=itemgetter(1))
+        if side == 'right':
+            predicted = sorted([(i, j) for i, j in zip(pos_o_batch, distance.tolist())], key=itemgetter(1))
+        else:
+            predicted = sorted([(i, j) for i, j in zip(pos_s_batch, distance.tolist())], key=itemgetter(1))
 
         skip = 0
         for i in range(len(predicted)):
-            current_o, current_distance = predicted[i]
-            if current_o == pos_o:
+            current_entity, current_distance = predicted[i]
+            if (side == 'right' and current_entity == pos_o) or (side == 'left' and current_entity == pos_s):
                 rank_raw += i + 1
                 rank_filter += i + 1 - skip
                 if i < config.top_k:
@@ -72,9 +79,9 @@ def link_prediction(sess, model, test_data, all_triples, side, verbose=True):
                 if i - skip < config.top_k:
                     hits_k_filter += 1
                 break
-            if side == 'right' and (pos_s, pos_p, current_o) in all_triples:
+            if side == 'right' and (pos_s, pos_p, current_entity) in all_triples:
                 skip += 1
-            elif side == 'left' and (current_o, pos_p, pos_s) in all_triples:
+            elif side == 'left' and (current_entity, pos_p, pos_s) in all_triples:
                 skip += 1
 
         step += 1

@@ -74,6 +74,7 @@ def main():
 
     print_title('Result')
     metrics = get_metrics(config.test_result, threshold)
+    metrics['threshold'] = threshold
     for k, v in metrics.items():
         print('{}: {}'.format(k, v))
 
