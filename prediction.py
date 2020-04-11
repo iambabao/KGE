@@ -36,8 +36,10 @@ config = Config('.', args.task, args.model,
 sess_config = tf.ConfigProto(allow_soft_placement=True)
 sess_config.gpu_options.allow_growth = True
 
+ground_truth = set()
 
-def link_prediction(sess, model, test_data, all_triples, side, verbose=True):
+
+def link_prediction(sess, model, test_data, side, verbose=True):
     step = 0
     rank_raw = 0
     rank_filter = 0
@@ -79,9 +81,9 @@ def link_prediction(sess, model, test_data, all_triples, side, verbose=True):
                 if i - skip < config.top_k:
                     hits_k_filter += 1
                 break
-            if side == 'right' and (pos_s, pos_p, current_entity) in all_triples:
+            if side == 'right' and (pos_s, pos_p, current_entity) in ground_truth:
                 skip += 1
-            elif side == 'left' and (current_entity, pos_p, pos_s) in all_triples:
+            elif side == 'left' and (current_entity, pos_p, pos_o) in ground_truth:
                 skip += 1
 
         step += 1
@@ -109,13 +111,12 @@ def main():
     train_data = data_reader.read_train_data()
     valid_data = data_reader.read_valid_data()
     test_data = data_reader.read_test_data()
-    all_triples = set()
     for sid, pid, oid in zip(*train_data):
-        all_triples.add((sid, pid, oid))
+        ground_truth.add((sid, pid, oid))
     for sid, pid, oid in zip(*valid_data):
-        all_triples.add((sid, pid, oid))
+        ground_truth.add((sid, pid, oid))
     for sid, pid, oid in zip(*test_data):
-        all_triples.add((sid, pid, oid))
+        ground_truth.add((sid, pid, oid))
 
     with tf.Session(config=sess_config) as sess:
         model_file = args.model_file
@@ -125,8 +126,8 @@ def main():
             print('loading model from {}...'.format(model_file))
             saver.restore(sess, model_file)
 
-            right_score = link_prediction(sess, model, test_data, all_triples, side='right', verbose=True)
-            left_score = link_prediction(sess, model, test_data, all_triples, side='left', verbose=True)
+            right_score = link_prediction(sess, model, test_data, side='right', verbose=True)
+            left_score = link_prediction(sess, model, test_data, side='left', verbose=True)
             hits_score = {
                 'mean_rank_raw_right': right_score[0],
                 'mean_rank_filter_right': right_score[1],

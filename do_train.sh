@@ -13,4 +13,6 @@ python main.py \
   --relation_em_size 200 \
   --optimizer SGD \
   --lr 0.5 \
-  --pre_train_epochs 50 \
+  --pre_train_epochs 100 \
+  --early_stop 0 \
+  --early_stop_delta 0.01

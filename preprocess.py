@@ -7,6 +7,7 @@
 """
 
 import os
+from collections import defaultdict
 
 from src.config import Config
 from src.utils import makedirs, save_json, save_json_dict, save_json_lines
@@ -32,7 +33,7 @@ def convert_data(config):
 
     def convert_spo(filename):
         data = []
-        relation_mapping = {}
+        relation_mapping = defaultdict(set)
         with open(filename, 'r', encoding='utf-8') as fin:
             fin.readline()
             for line in fin:
@@ -43,18 +44,24 @@ def convert_data(config):
                     'o': id_2_entity[int(oid)]
                 }
                 data.append(line)
-                if line['p'] not in relation_mapping:
-                    relation_mapping[line['p']] = {'s': [], 'o': []}
-                if line['s'] not in relation_mapping[line['p']]['s']:
-                    relation_mapping[line['p']]['s'].append(line['s'])
-                if line['o'] not in relation_mapping[line['p']]['o']:
-                    relation_mapping[line['p']]['o'].append(line['o'])
+                relation_mapping[line['p']].add((line['s'], line['o']))
 
-        return data, relation_mapping
+        replace_prob = {}
+        for p, so in relation_mapping.items():
+            s_dict = defaultdict(set)
+            o_dict = defaultdict(set)
+            for s, o in so:
+                s_dict[s].add(o)
+                o_dict[o].add(s)
+            tph = sum([len(s_dict[s]) for s in s_dict]) / len(s_dict)
+            hpt = sum([len(o_dict[o]) for o in o_dict]) / len(o_dict)
+            replace_prob[p] = {'s': tph / (tph + hpt), 'o': hpt / (tph + hpt)}
 
-    train_data, relation_mapping = convert_spo(os.path.join(config.data_dir, 'benchmarks', config.task_name, 'train2id.txt'))
+        return data, replace_prob
+
+    train_data, replace_prob = convert_spo(os.path.join(config.data_dir, 'benchmarks', config.task_name, 'train2id.txt'))
     save_json_lines(train_data, config.train_data)
-    save_json(relation_mapping, config.relation_mapping)
+    save_json(replace_prob, config.replace_dict)
     valid_data, _ = convert_spo(os.path.join(config.data_dir, 'benchmarks', config.task_name, 'valid2id.txt'))
     save_json_lines(valid_data, config.valid_data)
     test_data, _ = convert_spo(os.path.join(config.data_dir, 'benchmarks', config.task_name, 'test2id.txt'))

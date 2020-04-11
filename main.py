@@ -49,6 +49,7 @@ config = Config('.', args.task, args.model,
 sess_config = tf.ConfigProto(allow_soft_placement=True)
 sess_config.gpu_options.allow_growth = True
 
+ground_truth = set()
 
 def save_result(result, result_file):
     pos_dis, neg_dis = result
@@ -60,48 +61,48 @@ def save_result(result, result_file):
     save_json_lines(result, result_file)
 
 
-def negative_sampling_v0(s_batch, p_batch, o_batch, num_neg):
+def negative_sampling_unif(pos_s_batch, pos_p_batch, pos_o_batch, num_neg):
     entity_list = list(config.id_2_entity.keys())
-    pos_s_batch, pos_p_batch, pos_o_batch = [], [], []
     neg_s_batch, neg_p_batch, neg_o_batch = [], [], []
-    for pos_s, pos_p, pos_o in zip(s_batch, p_batch, o_batch):
-        neg_set = set()
-        while len(neg_set) < num_neg:
-            # replace subject or object with random selection
-            if random.randint(0, 2):
-                neg_set.add((random.choice(entity_list), pos_p, pos_o))
-            else:
-                neg_set.add((pos_s, pos_p, random.choice(entity_list)))
-        for neg_s, neg_p, neg_o in neg_set:
-            pos_s_batch.append(pos_s)
-            pos_p_batch.append(pos_p)
-            pos_o_batch.append(pos_o)
-            neg_s_batch.append(neg_s)
-            neg_p_batch.append(neg_p)
-            neg_o_batch.append(neg_o)
-    return pos_s_batch, pos_p_batch, pos_o_batch, neg_s_batch, neg_p_batch, neg_o_batch
-
-
-def negative_sampling_v1(s_batch, p_batch, o_batch, num_neg):
-    entity_list = list(config.id_2_entity.keys())
-    pos_s_batch, pos_p_batch, pos_o_batch = [], [], []
-    neg_s_batch, neg_p_batch, neg_o_batch = [], [], []
-    for pos_s, pos_p, pos_o in zip(s_batch, p_batch, o_batch):
+    for pos_s, pos_p, pos_o in zip(pos_s_batch, pos_p_batch, pos_o_batch):
         neg_set = set()
         while len(neg_set) < num_neg:
             # replace subject or object according to probability
-            if random.random() < config.replace_prob[pos_p]['s']:
-                neg_set.add((random.choice(entity_list), pos_p, pos_o))
+            if random.randint(0, 2):
+                sample = (random.choice(entity_list), pos_p, pos_o)
+                if sample not in ground_truth:
+                    neg_set.add(sample)
             else:
-                neg_set.add((pos_s, pos_p, random.choice(entity_list)))
-        for neg_s, neg_p, neg_o in neg_set:
-            pos_s_batch.append(pos_s)
-            pos_p_batch.append(pos_p)
-            pos_o_batch.append(pos_o)
-            neg_s_batch.append(neg_s)
-            neg_p_batch.append(neg_p)
-            neg_o_batch.append(neg_o)
-    return pos_s_batch, pos_p_batch, pos_o_batch, neg_s_batch, neg_p_batch, neg_o_batch
+                sample = (pos_s, pos_p, random.choice(entity_list))
+                if sample not in ground_truth:
+                    neg_set.add(sample)
+        neg_s, neg_p, neg_o = (neg for neg in zip(*neg_set))
+        neg_s_batch.append(neg_s)
+        neg_p_batch.append(neg_p)
+        neg_o_batch.append(neg_o)
+    return neg_s_batch, neg_p_batch, neg_o_batch
+
+
+def negative_sampling_bern(pos_s_batch, pos_p_batch, pos_o_batch, num_neg):
+    entity_list = list(config.id_2_entity.keys())
+    neg_s_batch, neg_p_batch, neg_o_batch = [], [], []
+    for pos_s, pos_p, pos_o in zip(pos_s_batch, pos_p_batch, pos_o_batch):
+        neg_set = set()
+        while len(neg_set) < num_neg:
+            # replace subject or object according to probability
+            if random.random() < config.replace_prob[config.id_2_relation[pos_p]]['s']:
+                sample = (random.choice(entity_list), pos_p, pos_o)
+                if sample not in ground_truth:
+                    neg_set.add(sample)
+            else:
+                sample = (pos_s, pos_p, random.choice(entity_list))
+                if sample not in ground_truth:
+                    neg_set.add(sample)
+        neg_s, neg_p, neg_o = (neg for neg in zip(*neg_set))
+        neg_s_batch.append(neg_s)
+        neg_p_batch.append(neg_p)
+        neg_o_batch.append(neg_o)
+    return neg_s_batch, neg_p_batch, neg_o_batch
 
 
 def run_test(sess, model, test_data, verbose=True):
@@ -110,7 +111,7 @@ def run_test(sess, model, test_data, verbose=True):
     batch_iter = make_batch_iter(list(zip(*test_data)), config.batch_size, shuffle=False, verbose=verbose)
     for step, batch in enumerate(batch_iter):
         pos_s, pos_p, pos_o = list(zip(*batch))
-        pos_s, pos_p, pos_o, neg_s, neg_p, neg_o = negative_sampling_v0(pos_s, pos_p, pos_o, num_neg=1)
+        neg_s, neg_p, neg_o = negative_sampling_unif(pos_s, pos_p, pos_o, num_neg=1)
 
         _pos_dis, _neg_dis, loss, accuracy = sess.run(
             [model.pos_dis, model.neg_dis, model.loss, model.accuracy],
@@ -126,7 +127,7 @@ def run_test(sess, model, test_data, verbose=True):
             }
         )
         pos_dis.extend(_pos_dis.tolist())
-        neg_dis.extend(_neg_dis.tolist())
+        neg_dis.extend(_neg_dis[:, 0].tolist())
 
         if verbose:
             print('\rprocessing batch: {:>6d}'.format(step + 1), end='')
@@ -144,7 +145,7 @@ def run_evaluate(sess, model, valid_data, valid_summary_writer=None, verbose=Tru
     batch_iter = make_batch_iter(list(zip(*valid_data)), config.batch_size, shuffle=False, verbose=verbose)
     for batch in batch_iter:
         pos_s, pos_p, pos_o = list(zip(*batch))
-        pos_s, pos_p, pos_o, neg_s, neg_p, neg_o = negative_sampling_v0(pos_s, pos_p, pos_o, num_neg=1)
+        neg_s, neg_p, neg_o = negative_sampling_unif(pos_s, pos_p, pos_o, num_neg=1)
 
         _pos_dis, _neg_dis, loss, accuracy, global_step, summary = sess.run(
             [model.pos_dis, model.neg_dis, model.loss, model.accuracy, model.global_step, model.summary],
@@ -160,7 +161,7 @@ def run_evaluate(sess, model, valid_data, valid_summary_writer=None, verbose=Tru
             }
         )
         pos_dis.extend(_pos_dis.tolist())
-        neg_dis.extend(_neg_dis.tolist())
+        neg_dis.extend(_neg_dis[:, 0].tolist())
 
         steps += 1
         total_loss += loss
@@ -190,7 +191,7 @@ def run_train(sess, model, train_data, valid_data, saver,
         for batch in batch_iter:
             start_time = time.time()
             pos_s, pos_p, pos_o = list(zip(*batch))
-            pos_s, pos_p, pos_o, neg_s, neg_p, neg_o = negative_sampling_v1(pos_s, pos_p, pos_o, num_neg=10)
+            neg_s, neg_p, neg_o = negative_sampling_bern(pos_s, pos_p, pos_o, num_neg=10)
 
             _, loss, accuracy, global_step, summary = sess.run(
                 [model.train_op, model.loss, model.accuracy, model.global_step, model.summary],
@@ -265,11 +266,7 @@ def main():
     config.relation_2_id, config.id_2_relation = read_json_dict(config.relation_dict)
     config.num_entity = len(config.entity_2_id)
     config.num_relation = len(config.relation_2_id)
-    relation_mapping = read_json(config.relation_mapping)
-    for p in relation_mapping.keys():
-        tph = len(relation_mapping[p]['o']) / len(relation_mapping[p]['s'])
-        hpt = len(relation_mapping[p]['s']) / len(relation_mapping[p]['o'])
-        config.replace_prob[config.relation_2_id[p]] = {'s': tph / (tph + hpt), 'o': hpt / (tph + hpt)}
+    config.replace_prob = read_json(config.replace_dict)
 
     data_reader = DataReader(config)
 
@@ -284,6 +281,8 @@ def main():
         print('loading data...')
         train_data = data_reader.read_train_data()
         valid_data = data_reader.read_valid_data()
+        for sid, pid, oid in zip(*train_data):
+            ground_truth.add((sid, pid, oid))
 
         print_title('Trainable Variables')
         for v in tf.trainable_variables():
@@ -296,7 +295,7 @@ def main():
         with tf.Session(config=sess_config) as sess:
             model_file = args.model_file
             if model_file is None:
-                model_file = tf.train.latest_checkpoint(config.result_dir)
+                model_file = tf.train.latest_checkpoint(os.path.join(config.result_dir, config.current_model))
             if model_file is not None:
                 print('loading model from {}...'.format(model_file))
                 saver.restore(sess, model_file)

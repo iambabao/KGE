@@ -38,7 +38,7 @@ class Config:
         self.label_dict = os.path.join(self.data_dir, self.task_name, 'dict_label.json')
         self.entity_dict = os.path.join(self.data_dir, self.task_name, 'dict_entity.json')
         self.relation_dict = os.path.join(self.data_dir, self.task_name, 'dict_relation.json')
-        self.relation_mapping = os.path.join(self.data_dir, self.task_name, 'relation_mapping.json')
+        self.replace_dict = os.path.join(self.data_dir, self.task_name, 'dict_replace.json')
 
         self.embedding_dir = os.path.join(self.data_dir, 'embedding')
         self.plain_text = os.path.join(self.embedding_dir, 'plain_text.txt')

@@ -25,9 +25,9 @@ class TransE:
         self.pos_s = tf.placeholder(tf.int32, [None], name='pos_s')
         self.pos_p = tf.placeholder(tf.int32, [None], name='pos_p')
         self.pos_o = tf.placeholder(tf.int32, [None], name='pos_o')
-        self.neg_s = tf.placeholder(tf.int32, [None], name='neg_s')
-        self.neg_p = tf.placeholder(tf.int32, [None], name='neg_p')
-        self.neg_o = tf.placeholder(tf.int32, [None], name='neg_o')
+        self.neg_s = tf.placeholder(tf.int32, [None, None], name='neg_s')
+        self.neg_p = tf.placeholder(tf.int32, [None, None], name='neg_p')
+        self.neg_o = tf.placeholder(tf.int32, [None, None], name='neg_o')
         self.training = tf.placeholder(tf.bool, [], name='training')
 
         self.global_step = tf.Variable(0, trainable=False, name='global_step')
@@ -54,10 +54,10 @@ class TransE:
             assert False
 
         self.pos_dis, self.neg_dis = self.forward()
-        margin_loss = tf.reduce_mean(tf.maximum(0.0, self.pos_dis - self.neg_dis + self.margin))
+        margin_loss = tf.reduce_mean(tf.maximum(0.0, tf.reshape(self.pos_dis, [-1, 1]) - self.neg_dis + self.margin))
         constrain_loss = self.get_constrain_loss()
         self.loss = margin_loss + self.l2_rate * constrain_loss
-        self.accuracy = tf.reduce_mean(tf.cast(tf.less(self.pos_dis, self.neg_dis), tf.float32))
+        self.accuracy = tf.reduce_mean(tf.cast(tf.less(tf.reshape(self.pos_dis, [-1, 1]), self.neg_dis), tf.float32))
         self.gradients, self.train_op = self.get_train_op()
 
         tf.summary.scalar('learning_rate', self.lr() if callable(self.lr) else self.lr)
@@ -92,13 +92,12 @@ class TransE:
         return gradients, train_op
 
     def embedding_layer(self):
-        with tf.device('/cpu:0'):
-            pos_s_em = self.pos_s_dropout(self.entity_embedding(self.pos_s), training=self.training)
-            pos_p_em = self.pos_p_dropout(self.relation_embedding(self.pos_p), training=self.training)
-            pos_o_em = self.pos_o_dropout(self.entity_embedding(self.pos_o), training=self.training)
-            neg_s_em = self.neg_s_dropout(self.entity_embedding(self.neg_s), training=self.training)
-            neg_p_em = self.neg_p_dropout(self.relation_embedding(self.neg_p), training=self.training)
-            neg_o_em = self.neg_o_dropout(self.entity_embedding(self.neg_o), training=self.training)
+        pos_s_em = self.pos_s_dropout(self.entity_embedding(self.pos_s), training=self.training)
+        pos_p_em = self.pos_p_dropout(self.relation_embedding(self.pos_p), training=self.training)
+        pos_o_em = self.pos_o_dropout(self.entity_embedding(self.pos_o), training=self.training)
+        neg_s_em = self.neg_s_dropout(self.entity_embedding(self.neg_s), training=self.training)
+        neg_p_em = self.neg_p_dropout(self.relation_embedding(self.neg_p), training=self.training)
+        neg_o_em = self.neg_o_dropout(self.entity_embedding(self.neg_o), training=self.training)
 
         return pos_s_em, pos_p_em, pos_o_em, neg_s_em, neg_p_em, neg_o_em
 
